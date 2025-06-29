@@ -37,6 +37,8 @@ async def interactive_mode(host: BioMCPHost):
     print("\n=== Bio MCP Host Interactive Mode ===")
     print("Commands:")
     print("  chat <message>     - Chat with the default LLM")
+    print("  use <provider>     - Switch default LLM provider")
+    print("  switch <provider> <model> - Switch provider to specific model")
     print("  status            - Show host status")
     print("  tools             - List available tools")
     print("  clients           - List LLM clients")
@@ -89,6 +91,33 @@ async def interactive_mode(host: BioMCPHost):
                     async for chunk in host.chat_stream(session_id, message):
                         print(chunk, end="", flush=True)
                     print()  # New line after streaming
+            elif command.startswith("use "):
+                provider = command[4:].strip()
+                if provider:
+                    try:
+                        host.llm_manager.set_default_client(provider)
+                        print(f"✅ Switched default provider to: {provider}")
+                    except Exception as e:
+                        print(f"❌ Failed to switch to {provider}: {e}")
+                        # Show available providers
+                        clients = host.get_llm_clients()
+                        available = list(clients.keys())
+                        print(f"Available providers: {', '.join(available)}")
+                else:
+                    print("Usage: use <provider>")
+                    print("Example: use google")
+            elif command.startswith("switch "):
+                parts = command[7:].strip().split()
+                if len(parts) == 2:
+                    provider, model = parts
+                    try:
+                        host.switch_llm_model(provider, model)
+                        print(f"✅ Switched {provider} to model: {model}")
+                    except Exception as e:
+                        print(f"❌ Failed to switch {provider} to {model}: {e}")
+                else:
+                    print("Usage: switch <provider> <model>")
+                    print("Example: switch google gemini-1.5-flash")
             else:
                 print(f"Unknown command: {command}")
                 

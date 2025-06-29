@@ -190,7 +190,7 @@ class GoogleClient(BaseLLMClient):
             test_messages = [Message(role="user", content="Hello")]
             response = await self.chat_completion(
                 messages=test_messages,
-                max_tokens=10
+                max_tokens=1000
             )
             return response.content is not None
         except Exception:
