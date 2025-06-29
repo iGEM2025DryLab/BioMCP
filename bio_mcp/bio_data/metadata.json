@@ -1,0 +1,19 @@
+{
+  "test_4d9769a7": {
+    "filename": "test.pdb",
+    "file_id": "test_4d9769a7",
+    "size": 102,
+    "file_type": ".pdb",
+    "upload_time": "2025-06-29T10:27:24.046156",
+    "checksum": "4d9769a71e2c57918767dcfe2c060e77",
+    "bio_type": "structure",
+    "additional_info": {
+      "header": "TEST PROTEIN",
+      "pdb_id": "",
+      "chains": [
+        "A"
+      ],
+      "residue_count": 1
+    }
+  }
+}

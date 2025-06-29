@@ -1,0 +1,26 @@
+name: bio-mcp
+channels:
+  - conda-forge
+  - schrodinger
+  - defaults
+dependencies:
+  - python=3.11
+  - pymol-open-source
+  - pip
+  - pip:
+    - mcp>=1.0.0
+    - propka
+    - biopython
+    - fastapi
+    - uvicorn
+    - websockets
+    - aiofiles
+    - anthropic
+    - openai
+    - google-generativeai
+    - dashscope
+    - pydantic
+    - pytest
+    - pytest-asyncio
+    - python-dotenv
+

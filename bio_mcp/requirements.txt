@@ -1,0 +1,16 @@
+# Bio MCP Requirements
+mcp>=1.0.0
+propka
+biopython
+fastapi
+uvicorn
+websockets
+aiofiles
+anthropic
+openai
+google-generativeai
+dashscope
+pydantic
+pytest
+pytest-asyncio
+python-dotenv
