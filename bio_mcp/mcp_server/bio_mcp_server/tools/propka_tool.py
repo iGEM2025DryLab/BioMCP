@@ -12,6 +12,67 @@ class PropkaTool:
     def __init__(self):
         self.temp_dir = Path(tempfile.gettempdir()) / "bio_mcp_propka"
         self.temp_dir.mkdir(exist_ok=True)
+        self.propka_available = self._check_propka_available()
+    
+    def _check_propka_available(self) -> bool:
+        """Check if PROPKA is available"""
+        # Build propka paths dynamically
+        propka_paths = ['propka3']
+        
+        # Add common conda locations
+        common_conda_roots = [
+            Path.home() / 'anaconda3',
+            Path.home() / 'miniconda3',
+            Path('/opt/anaconda3'),
+            Path('/opt/miniconda3'), 
+            Path('/usr/local/anaconda3'),
+            Path('/usr/local/miniconda3')
+        ]
+        
+        common_env_names = ['bio-mcp', 'biomcp', 'bio_mcp', 'propka']
+        
+        for conda_root in common_conda_roots:
+            if conda_root.exists():
+                # Add base conda propka3
+                propka_paths.append(str(conda_root / 'bin' / 'propka3'))
+                
+                # Add environment-specific propka3
+                for env_name in common_env_names:
+                    propka_paths.append(str(conda_root / 'envs' / env_name / 'bin' / 'propka3'))
+        
+        # Check for direct executable
+        for propka_path in propka_paths:
+            try:
+                if Path(propka_path).exists() or propka_path == 'propka3':
+                    result = subprocess.run([propka_path, '--help'], 
+                                          capture_output=True, 
+                                          timeout=5)
+                    if result.returncode == 0:
+                        return True
+            except:
+                continue
+        
+        # Check for Python module
+        python_paths = ['python3', 'python']
+        
+        # Add conda python paths
+        for conda_root in common_conda_roots:
+            if conda_root.exists():
+                python_paths.append(str(conda_root / 'bin' / 'python'))
+                for env_name in common_env_names:
+                    python_paths.append(str(conda_root / 'envs' / env_name / 'bin' / 'python'))
+        
+        for python_path in python_paths:
+            try:
+                result = subprocess.run([python_path, '-c', 'import propka; print("PROPKA available")'], 
+                                      capture_output=True, 
+                                      timeout=5)
+                if result.returncode == 0:
+                    return True
+            except:
+                continue
+                
+        return False
     
     async def calculate_pka(self, 
                           pdb_file_path: Path, 
@@ -30,6 +91,12 @@ class PropkaTool:
         Returns:
             Dict with pKa results and analysis
         """
+        
+        if not self.propka_available:
+            return {
+                "success": False,
+                "error": "PROPKA is not available. Please ensure propka3 is installed and accessible."
+            }
         
         if not pdb_file_path.exists():
             raise FileNotFoundError(f"PDB file not found: {pdb_file_path}")
@@ -108,31 +175,69 @@ class PropkaTool:
     async def _run_propka(self, pdb_file: Path, ph: float) -> str:
         """Run PROPKA calculation"""
         
-        cmd = [
-            'python', '-m', 'propka3.propka',
-            '--ph', str(ph),
-            '--quiet',
-            str(pdb_file)
+        # Try different PROPKA execution methods dynamically
+        propka_commands = [['propka3', str(pdb_file)]]
+        
+        # Add conda-specific commands
+        common_conda_roots = [
+            Path.home() / 'anaconda3',
+            Path.home() / 'miniconda3',
+            Path('/opt/anaconda3'),
+            Path('/opt/miniconda3'),
+            Path('/usr/local/anaconda3'),
+            Path('/usr/local/miniconda3')
         ]
         
-        try:
-            # Run PROPKA asynchronously
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=str(self.temp_dir)
-            )
-            
-            stdout, stderr = await process.communicate()
-            
-            if process.returncode != 0:
-                raise RuntimeError(f"PROPKA failed: {stderr.decode()}")
-            
-            return stdout.decode()
-            
-        except FileNotFoundError:
-            raise RuntimeError("PROPKA not found. Please ensure propka3 is installed.")
+        common_env_names = ['bio-mcp', 'biomcp', 'bio_mcp', 'propka']
+        
+        for conda_root in common_conda_roots:
+            if conda_root.exists():
+                # Add base conda propka3
+                propka_commands.append([str(conda_root / 'bin' / 'propka3'), str(pdb_file)])
+                propka_commands.append([str(conda_root / 'bin' / 'python'), '-m', 'propka3.propka', str(pdb_file)])
+                
+                # Add environment-specific commands
+                for env_name in common_env_names:
+                    env_propka = conda_root / 'envs' / env_name / 'bin' / 'propka3'
+                    env_python = conda_root / 'envs' / env_name / 'bin' / 'python'
+                    if env_propka.exists():
+                        propka_commands.append([str(env_propka), str(pdb_file)])
+                    if env_python.exists():
+                        propka_commands.append([str(env_python), '-m', 'propka3.propka', str(pdb_file)])
+        
+        # Add generic python approaches
+        propka_commands.extend([
+            ['python3', '-m', 'propka3.propka', str(pdb_file)],
+            ['python', '-m', 'propka3.propka', str(pdb_file)]
+        ])
+        
+        last_error = None
+        
+        for cmd in propka_commands:
+            try:
+                # Run PROPKA asynchronously
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=str(self.temp_dir)
+                )
+                
+                stdout, stderr = await process.communicate()
+                
+                if process.returncode == 0:
+                    return stdout.decode()
+                else:
+                    last_error = f"PROPKA failed with {' '.join(cmd)}: {stderr.decode()}"
+                    
+            except FileNotFoundError as e:
+                last_error = f"Command not found: {' '.join(cmd)}"
+                continue
+            except Exception as e:
+                last_error = f"Error with {' '.join(cmd)}: {str(e)}"
+                continue
+        
+        raise RuntimeError(f"PROPKA not found. Please ensure propka3 is installed. Last error: {last_error}")
     
     async def _parse_propka_output(self, pdb_file: Path, propka_output: str) -> Dict[str, Any]:
         """Parse PROPKA output files"""
@@ -144,46 +249,36 @@ class PropkaTool:
             "surface_groups": []
         }
         
-        # Try to read .pka file first
+        # Try to read .pka file first (main source of data)
         pka_file = pdb_file.with_suffix('.pka')
         if pka_file.exists():
-            results.update(await self._parse_pka_file(pka_file))
-        
-        # Parse stdout output
-        lines = propka_output.split('\n')
-        in_summary = False
-        
-        for line in lines:
-            line = line.strip()
+            pka_results = await self._parse_pka_file(pka_file)
+            results.update(pka_results)
             
-            if 'SUMMARY' in line:
-                in_summary = True
-                continue
-            
-            if in_summary and line and not line.startswith('-'):
-                parts = line.split()
-                if len(parts) >= 4:
-                    try:
-                        residue = parts[0]
-                        chain = parts[1] if len(parts) > 1 else 'A'
-                        pka_value = float(parts[2])
-                        
-                        group_info = {
-                            "residue": residue,
-                            "chain": chain,
-                            "pka": pka_value,
-                            "residue_number": parts[3] if len(parts) > 3 else None
-                        }
-                        
-                        results["ionizable_groups"].append(group_info)
-                        
-                        # Group by residue type
-                        if residue not in results["pka_values"]:
-                            results["pka_values"][residue] = []
-                        results["pka_values"][residue].append(pka_value)
-                        
-                    except (ValueError, IndexError):
-                        continue
+            # Extract ionizable groups from pka file
+            if "detailed_analysis" in pka_results:
+                for item in pka_results["detailed_analysis"]:
+                    if isinstance(item, dict) and "residue" in item and "pka" in item:
+                        # Parse residue info: "ASP  19 A" -> residue="ASP", residue_number="19", chain="A"
+                        residue_parts = item["residue"].split()
+                        if len(residue_parts) >= 3:
+                            residue_type = residue_parts[0]
+                            residue_number = residue_parts[1]
+                            chain = residue_parts[2]
+                            
+                            group_info = {
+                                "residue": residue_type,
+                                "chain": chain,
+                                "pka": item["pka"],
+                                "residue_number": residue_number
+                            }
+                            
+                            results["ionizable_groups"].append(group_info)
+                            
+                            # Group by residue type
+                            if residue_type not in results["pka_values"]:
+                                results["pka_values"][residue_type] = []
+                            results["pka_values"][residue_type].append(item["pka"])
         
         return results
     
@@ -200,29 +295,60 @@ class PropkaTool:
             with open(pka_file, 'r') as f:
                 content = f.read()
                 
-            # Parse detailed information
+            # Parse the PROPKA output format
             lines = content.split('\n')
-            current_residue = None
+            parsing_data = False
             
             for line in lines:
                 line = line.strip()
                 
-                if line.startswith('pKa'):
-                    # Parse pKa line
+                # Look for the data section (after the header)
+                if line.startswith('---------  -----   ------'):
+                    parsing_data = True
+                    continue
+                    
+                if not parsing_data or not line:
+                    continue
+                    
+                # Parse residue data lines
+                # Format: "ASP  19 A   5.48   100 %    4.48  630   0.79    0   -0.85 THR 100 A   -0.79 ILE  99 A   -0.44 LYS 102 A"
+                if line and not line.startswith('-') and not line.startswith('RESIDUE'):
                     parts = line.split()
-                    if len(parts) >= 3:
-                        residue_info = {
-                            "residue": parts[1],
-                            "pka": float(parts[2]),
-                            "interactions": []
-                        }
-                        results["detailed_analysis"].append(residue_info)
-                        current_residue = residue_info
-                
-                elif line and current_residue and ('HIS' in line or 'ASP' in line or 'GLU' in line or 'LYS' in line or 'TYR' in line):
-                    # Parse interaction line
-                    if 'Side chain' in line or 'Backbone' in line:
-                        current_residue["interactions"].append(line)
+                    if len(parts) >= 4:
+                        try:
+                            residue_type = parts[0]
+                            residue_number = parts[1]
+                            chain = parts[2]
+                            pka_value = float(parts[3])
+                            
+                            residue_key = f"{residue_type}  {residue_number} {chain}"
+                            
+                            # Check if we already have this residue
+                            existing_residue = None
+                            for res in results["detailed_analysis"]:
+                                if res["residue"] == residue_key:
+                                    existing_residue = res
+                                    break
+                            
+                            if not existing_residue:
+                                residue_info = {
+                                    "residue": residue_key,
+                                    "pka": pka_value,
+                                    "interactions": []
+                                }
+                                results["detailed_analysis"].append(residue_info)
+                            else:
+                                # Additional interaction line for same residue
+                                if len(parts) > 4:
+                                    interaction_info = " ".join(parts[4:])
+                                    existing_residue["interactions"].append(interaction_info)
+                                    
+                        except (ValueError, IndexError):
+                            # This might be a continuation line with interactions
+                            if results["detailed_analysis"]:
+                                interaction_info = line
+                                results["detailed_analysis"][-1]["interactions"].append(interaction_info)
+                            continue
                         
         except Exception as e:
             results["parse_error"] = str(e)

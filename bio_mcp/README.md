@@ -52,12 +52,19 @@ pip install -r requirements.txt
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Install bio analysis tools (optional)
+# Install bio analysis tools (recommended)
 # For PROPKA support
 pip install propka
 
-# For PyMOL support (requires separate installation)
-# See: https://pymol.org/2/
+# For PyMOL support - choose one of:
+# Option A: Using conda (recommended)
+conda install -c conda-forge pymol-open-source
+
+# Option B: From PyMOL website
+# Download and install from: https://pymol.org/2/
+
+# Option C: Using pip (may require additional system dependencies)
+pip install pymol-open-source
 ```
 
 ### 3. Configure API Keys (Optional)
@@ -240,8 +247,14 @@ Bio MCP uses the Model Context Protocol for AI tool interoperability. The system
 - Test individual clients with `clients` command
 
 **Tool Installation Issues**
-- PROPKA: `pip install propka`
-- PyMOL: Requires separate installation from https://pymol.org/
+- PROPKA: `pip install propka` or `conda install -c conda-forge propka3`
+- PyMOL: `conda install -c conda-forge pymol-open-source` (recommended) or from https://pymol.org/
+
+**Tool Detection Issues**
+- Set environment variable: `export PYMOL_EXECUTABLE=/path/to/your/pymol`
+- Ensure tools are in your PATH: `which pymol` and `which propka3`
+- For conda environments: activate the environment before running Bio MCP
+- Use the test script: `python3 test_tools.py` to verify tool detection
 
 ### Getting Help
 

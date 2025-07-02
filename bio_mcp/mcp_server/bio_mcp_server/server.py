@@ -28,26 +28,26 @@ class BioMCPServer:
             return [
                 Tool(
                     name="upload_file",
-                    description="Upload a file to the bio file system. Content should be base64 encoded.",
+                    description="📁 Upload biological files (PDB, FASTA, etc.) to the research workspace. Files are automatically categorized by type and made available for analysis.",
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "filename": {"type": "string", "description": "Name of the file"},
-                            "content": {"type": "string", "description": "Base64 encoded file content"}
+                            "filename": {"type": "string", "description": "File name with extension (e.g., 'protein.pdb', 'sequence.fasta')"},
+                            "content": {"type": "string", "description": "Base64 encoded file content - use btoa() in JavaScript or base64.b64encode() in Python"}
                         },
                         "required": ["filename", "content"]
                     }
                 ),
                 Tool(
                     name="list_files",
-                    description="List all files in the bio file system with optional filtering",
+                    description="📋 Browse all uploaded biological files with intelligent filtering. View structures, sequences, and analysis results organized by type.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "bio_type": {
                                 "type": "string", 
                                 "enum": ["structure", "dna", "rna", "protein", "small_molecule"],
-                                "description": "Filter by biological file type"
+                                "description": "Filter by biological data type: 'structure' for PDB/mmCIF, 'protein' for sequences, 'dna'/'rna' for nucleic acids"
                             }
                         }
                     }
@@ -65,13 +65,13 @@ class BioMCPServer:
                 ),
                 Tool(
                     name="read_file_content",
-                    description="Read file content with optional line range to manage context",
+                    description="📖 Smart file content reader with context management. Efficiently handles large biological files (PDB, FASTA) by reading specific sections. Automatically formats content for analysis.",
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "file_id": {"type": "string", "description": "ID of the file"},
-                            "start_line": {"type": "integer", "default": 0, "description": "Starting line number (0-based)"},
-                            "max_lines": {"type": "integer", "default": 1000, "description": "Maximum number of lines to read"}
+                            "file_id": {"type": "string", "description": "ID of uploaded file to read"},
+                            "start_line": {"type": "integer", "default": 0, "description": "Starting line number (0-based). For PDB files: 0=header, ~10=structure data"},
+                            "max_lines": {"type": "integer", "default": 1000, "description": "Maximum lines to read (prevents context overflow). For large files, read in chunks."}
                         },
                         "required": ["file_id"]
                     }
@@ -91,11 +91,11 @@ class BioMCPServer:
                 ),
                 Tool(
                     name="read_pdb_header",
-                    description="Extract and read only the header information from a PDB file",
+                    description="📄 Extract PDB header metadata including protein name, resolution, experimental method, publication info, and structural annotations. Essential for understanding structure context.",
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "file_id": {"type": "string", "description": "ID of the PDB file"}
+                            "file_id": {"type": "string", "description": "ID of uploaded PDB structure file"}
                         },
                         "required": ["file_id"]
                     }
@@ -141,20 +141,20 @@ class BioMCPServer:
                 ),
                 Tool(
                     name="calculate_pka",
-                    description="Calculate pKa values for ionizable residues using PROPKA",
+                    description="🧪 Advanced pKa analysis using PROPKA3 - Calculate ionization states of ASP, GLU, HIS, CYS, TYR, LYS, ARG residues. Predicts protonation at different pH values with detailed interaction analysis.",
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "file_id": {"type": "string", "description": "ID of the PDB structure file"},
-                            "ph": {"type": "number", "default": 7.0, "description": "pH value for calculation"},
-                            "chains": {"type": "array", "items": {"type": "string"}, "description": "Specific chains to analyze (optional)"},
+                            "file_id": {"type": "string", "description": "ID of uploaded PDB structure file to analyze"},
+                            "ph": {"type": "number", "default": 7.0, "description": "pH value for protonation state calculation (typical range: 1-14, physiological ~7.4)"},
+                            "chains": {"type": "array", "items": {"type": "string"}, "description": "Specific protein chains to analyze (e.g., ['A', 'B']). Leave empty for all chains."},
                             "residue_range": {
                                 "type": "object",
                                 "properties": {
-                                    "start": {"type": "integer", "description": "Starting residue number"},
-                                    "end": {"type": "integer", "description": "Ending residue number"}
+                                    "start": {"type": "integer", "description": "Starting residue number (inclusive)"},
+                                    "end": {"type": "integer", "description": "Ending residue number (inclusive)"}
                                 },
-                                "description": "Residue range to analyze (optional)"
+                                "description": "Optional residue number range to focus analysis on specific protein regions"
                             }
                         },
                         "required": ["file_id"]
@@ -173,21 +173,21 @@ class BioMCPServer:
                 ),
                 Tool(
                     name="visualize_structure",
-                    description="Create structure visualization using PyMOL",
+                    description="🎨 Generate publication-quality protein structure images using PyMOL. Creates static visualizations with customizable styles, colors, and highlighting for presentations and analysis.",
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "file_id": {"type": "string", "description": "ID of the PDB structure file"},
+                            "file_id": {"type": "string", "description": "ID of uploaded PDB structure file to visualize"},
                             "style": {
                                 "type": "string",
                                 "enum": ["cartoon", "surface", "sticks", "spheres", "ribbon"],
                                 "default": "cartoon",
-                                "description": "Visualization style"
+                                "description": "Primary visualization style: 'cartoon' for secondary structure, 'surface' for molecular surface, 'sticks' for bonds, 'spheres' for atoms, 'ribbon' for backbone"
                             },
-                            "chains": {"type": "array", "items": {"type": "string"}, "description": "Specific chains to visualize"},
-                            "residues": {"type": "array", "items": {"type": "string"}, "description": "Specific residues to highlight"},
-                            "width": {"type": "integer", "default": 800, "description": "Image width"},
-                            "height": {"type": "integer", "default": 600, "description": "Image height"}
+                            "chains": {"type": "array", "items": {"type": "string"}, "description": "Specific chains to display (e.g., ['A', 'B']). Leave empty for all chains."},
+                            "residues": {"type": "array", "items": {"type": "string"}, "description": "Specific residues to highlight with special coloring (e.g., ['HIS64', 'ASP102'])"},
+                            "width": {"type": "integer", "default": 800, "description": "Output image width in pixels (recommended: 800-2400 for publications)"},
+                            "height": {"type": "integer", "default": 600, "description": "Output image height in pixels (recommended: 600-1800 for publications)"}
                         },
                         "required": ["file_id"]
                     }
@@ -219,6 +219,81 @@ class BioMCPServer:
                             "file_id": {"type": "string", "description": "ID of the PDB structure file"}
                         },
                         "required": ["file_id"]
+                    }
+                ),
+                Tool(
+                    name="launch_pymol_gui",
+                    description="🖥️ Launch interactive PyMOL GUI with real-time control. Supports XML-RPC for instant command execution, direct Python module integration, and script-based fallback. Perfect for interactive structure exploration.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "file_id": {"type": "string", "description": "Optional: ID of PDB structure file to load immediately upon launch. Leave empty to start with blank session."}
+                        }
+                    }
+                ),
+                Tool(
+                    name="execute_pymol_command",
+                    description="⚡ Execute PyMOL commands in real-time within active GUI session. Supports all PyMOL commands: visualization (show, hide, color), selection (select), analysis (distance, angle), and scripting commands.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "command": {"type": "string", "description": "PyMOL command to execute (e.g., 'show cartoon', 'color red, chain A', 'select active_site, resn HIS+ASP+GLU', 'distance d1, resid 100, resid 200')"}
+                        },
+                        "required": ["command"]
+                    }
+                ),
+                Tool(
+                    name="load_structure_gui",
+                    description="Load a protein structure in PyMOL GUI",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "file_id": {"type": "string", "description": "ID of the PDB structure file"},
+                            "object_name": {"type": "string", "default": "structure", "description": "Name for the loaded object"}
+                        },
+                        "required": ["file_id"]
+                    }
+                ),
+                Tool(
+                    name="apply_gui_style",
+                    description="Apply visualization style in PyMOL GUI",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "object_name": {"type": "string", "description": "Name of the loaded object"},
+                            "style": {
+                                "type": "string",
+                                "enum": ["cartoon", "surface", "sticks", "spheres"],
+                                "description": "Visualization style"
+                            },
+                            "color": {"type": "string", "default": "spectrum", "description": "Color scheme"}
+                        },
+                        "required": ["object_name", "style"]
+                    }
+                ),
+                Tool(
+                    name="highlight_residues_gui",
+                    description="Highlight specific residues in PyMOL GUI",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "object_name": {"type": "string", "description": "Name of the loaded object"},
+                            "residue_selections": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "PyMOL selection strings for residues to highlight"
+                            },
+                            "color": {"type": "string", "default": "red", "description": "Highlight color"}
+                        },
+                        "required": ["object_name", "residue_selections"]
+                    }
+                ),
+                Tool(
+                    name="get_pymol_gui_status",
+                    description="Get status of PyMOL GUI session",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {}
                     }
                 )
             ]
@@ -254,13 +329,25 @@ class BioMCPServer:
                     return await self._create_surface_view(arguments)
                 elif name == "analyze_structure_pymol":
                     return await self._analyze_structure_pymol(arguments)
+                elif name == "launch_pymol_gui":
+                    return await self._launch_pymol_gui(arguments)
+                elif name == "execute_pymol_command":
+                    return await self._execute_pymol_command(arguments)
+                elif name == "load_structure_gui":
+                    return await self._load_structure_gui(arguments)
+                elif name == "apply_gui_style":
+                    return await self._apply_gui_style(arguments)
+                elif name == "highlight_residues_gui":
+                    return await self._highlight_residues_gui(arguments)
+                elif name == "get_pymol_gui_status":
+                    return await self._get_pymol_gui_status(arguments)
                 else:
                     return [TextContent(type="text", text=f"Unknown tool: {name}")]
             except Exception as e:
                 return [TextContent(type="text", text=f"Error executing tool {name}: {str(e)}")]
     
     async def _upload_file(self, args: Dict[str, Any]) -> List[TextContent]:
-        """Upload file to file system"""
+        """Upload biological file to research workspace"""
         filename = args["filename"]
         content_b64 = args["content"]
         
@@ -268,34 +355,46 @@ class BioMCPServer:
             content = base64.b64decode(content_b64)
             file_id = await self.file_system.upload_file(filename, content)
             
+            # Get file info for better response
+            file_info = await self.file_system.get_file_info(file_id)
+            bio_type = file_info.get('bio_type', 'Unknown') if file_info else 'Unknown'
+            size = len(content)
+            
             return [TextContent(
                 type="text",
-                text=f"File uploaded successfully. File ID: {file_id}"
+                text=f"✅ **{filename}** uploaded successfully!\n\n📄 **File Details:**\n• ID: `{file_id}`\n• Type: {bio_type}\n• Size: {size:,} bytes\n\n🔬 The file is now ready for analysis. Use tools like `calculate_pka`, `visualize_structure`, or `launch_pymol_gui` to begin research."
             )]
         except Exception as e:
             return [TextContent(
                 type="text",
-                text=f"Failed to upload file: {str(e)}"
+                text=f"❌ **Upload failed:** {str(e)}\n\n💡 **Tips:**\n• Ensure content is properly base64 encoded\n• Check file format (PDB, FASTA, etc.)\n• Verify file size is reasonable"
             )]
     
     async def _list_files(self, args: Dict[str, Any]) -> List[TextContent]:
-        """List files in the file system"""
+        """Browse uploaded biological files"""
         bio_type = args.get("bio_type")
         files = await self.file_system.list_files(bio_type)
         
         if not files:
+            filter_text = f" of type '{bio_type}'" if bio_type else ""
             return [TextContent(
                 type="text",
-                text="No files found" + (f" of type '{bio_type}'" if bio_type else "")
+                text=f"📂 **No files found{filter_text}**\n\n💡 **Get started:**\n• Upload files using `upload_file`\n• Supported formats: PDB, FASTA, mmCIF, GenBank\n• Try example: upload a protein structure from RCSB PDB"
             )]
         
-        result = f"Found {len(files)} file(s)" + (f" of type '{bio_type}'" if bio_type else "") + ":\n\n"
+        type_emoji = {"structure": "🧬", "protein": "🔗", "dna": "🧬", "rna": "🧬", "small_molecule": "⚛️"}
+        filter_text = f" ({bio_type} files)" if bio_type else ""
+        result = f"📁 **Research Workspace{filter_text}** - {len(files)} file(s):\n\n"
         
         for file_info in files:
-            result += f"• **{file_info['filename']}** (ID: {file_info['file_id']})\n"
-            result += f"  Type: {file_info['bio_type'] or 'Unknown'} | Size: {file_info['size']:,} bytes\n"
-            result += f"  Summary: {file_info['summary']}\n"
-            result += f"  Uploaded: {file_info['upload_time']}\n\n"
+            emoji = type_emoji.get(file_info['bio_type'], "📄")
+            result += f"{emoji} **{file_info['filename']}**\n"
+            result += f"   🆔 ID: `{file_info['file_id']}`\n"
+            result += f"   📊 Type: {file_info['bio_type'] or 'Unknown'} | Size: {file_info['size']:,} bytes\n"
+            result += f"   📝 {file_info['summary']}\n"
+            result += f"   ⏰ Uploaded: {file_info['upload_time']}\n\n"
+        
+        result += "🔬 **Available Actions:**\n• `calculate_pka` - Analyze pKa values\n• `visualize_structure` - Create images\n• `launch_pymol_gui` - Interactive exploration"
         
         return [TextContent(type="text", text=result)]
     
@@ -530,38 +629,40 @@ class BioMCPServer:
         return [TextContent(type="text", text=result)]
     
     async def _calculate_pka(self, args: Dict[str, Any]) -> List[TextContent]:
-        """Calculate pKa values using PROPKA"""
+        """Advanced pKa analysis using PROPKA3"""
         file_id = args["file_id"]
         ph = args.get("ph", 7.0)
         chains = args.get("chains")
         residue_range = args.get("residue_range")
         
-        # Get file path
+        # Get file path and info
         file_path = await self.file_system.get_file_path(file_id)
         if file_path is None:
             return [TextContent(
                 type="text",
-                text=f"File with ID '{file_id}' not found"
+                text=f"❌ **File not found:** ID '{file_id}' doesn't exist\n\n💡 **Tip:** Use `list_files` to see available structures"
             )]
         
-        # Check if it's a structure file
         file_info = await self.file_system.get_file_info(file_id)
+        structure_name = file_info.get('filename', 'Unknown') if file_info else 'Unknown'
+        
         if file_info and file_info.get("bio_type") != "structure":
             return [TextContent(
                 type="text",
-                text=f"File '{file_id}' is not a structure file. PROPKA requires PDB files."
+                text=f"⚠️ **Invalid file type:** '{structure_name}' is not a PDB structure\n\n🧪 **PROPKA requirements:**\n• PDB format (.pdb)\n• Protein structure with coordinates\n• Contains ionizable residues (ASP, GLU, HIS, CYS, TYR, LYS, ARG)"
             )]
         
-        # Run PROPKA calculation
+        # Run PROPKA calculation with enhanced feedback
         try:
             result = await self.propka_tool.calculate_pka(
                 file_path, ph, chains, residue_range
             )
             
             if not result["success"]:
+                error_msg = result.get('error', 'Unknown error')
                 return [TextContent(
                     type="text",
-                    text=f"PROPKA calculation failed: {result.get('error', 'Unknown error')}"
+                    text=f"❌ **PROPKA calculation failed**\n\n**Error:** {error_msg}\n\n🔧 **Troubleshooting:**\n• Ensure PROPKA3 is installed: `pip install propka`\n• Check PDB file format and structure\n• Verify ionizable residues are present\n• Try with default parameters first"
                 )]
             
             # Format results
@@ -606,12 +707,27 @@ class BioMCPServer:
                 if len(ionizable_groups) > 20:
                     output += f"... and {len(ionizable_groups) - 20} more residues\n"
             
+            # Add biological interpretation
+            output += f"\n🧬 **Biological Insights:**\n"
+            if significant_shifts:
+                output += "• Significant pKa shifts indicate **protein microenvironment effects**\n"
+                output += "• Consider **electrostatic interactions** and **hydrogen bonding**\n"
+            else:
+                output += "• pKa values are **close to standard** - minimal environmental perturbation\n"
+                output += "• Residues likely **surface-exposed** or in **typical environments**\n"
+            
+            if total_groups > 0:
+                output += f"\n🔬 **Next Steps:**\n"
+                output += "• Use `visualize_structure` to see ionizable residues\n"
+                output += "• Try `launch_pymol_gui` for interactive exploration\n"
+                output += "• Consider different pH values for protonation analysis\n"
+            
             return [TextContent(type="text", text=output)]
             
         except Exception as e:
             return [TextContent(
                 type="text",
-                text=f"Error running PROPKA calculation: {str(e)}"
+                text=f"💥 **Calculation error:** {str(e)}\n\n🔧 **Common issues:**\n• PROPKA3 not installed\n• Invalid PDB format\n• No ionizable residues found\n• File permission issues"
             )]
     
     async def _list_ionizable_residues(self, args: Dict[str, Any]) -> List[TextContent]:
@@ -844,6 +960,311 @@ class BioMCPServer:
             return [TextContent(
                 type="text",
                 text=f"Error analyzing structure: {str(e)}"
+            )]
+    
+    async def _launch_pymol_gui(self, args: Dict[str, Any]) -> List[TextContent]:
+        """Launch PyMOL GUI for interactive visualization"""
+        file_id = args.get("file_id")
+        
+        file_path = None
+        if file_id:
+            file_path = await self.file_system.get_file_path(file_id)
+            if file_path is None:
+                return [TextContent(
+                    type="text",
+                    text=f"File with ID '{file_id}' not found"
+                )]
+            
+            # Check if it's a structure file
+            file_info = await self.file_system.get_file_info(file_id)
+            if file_info and file_info.get("bio_type") != "structure":
+                return [TextContent(
+                    type="text",
+                    text=f"File '{file_id}' is not a structure file."
+                )]
+        
+        try:
+            result = await self.pymol_tool.launch_gui_session(file_path)
+            
+            if not result["success"]:
+                return [TextContent(
+                    type="text",
+                    text=f"Failed to launch PyMOL GUI: {result.get('error', 'Unknown error')}"
+                )]
+            
+            output = f"**PyMOL GUI Launched Successfully**\n\n"
+            output += f"• GUI Mode: {result.get('gui_mode', False)}\n"
+            output += f"• Control Method: {result.get('control_mode', 'unknown')}\n"
+            
+            if result.get("rpc_port"):
+                output += f"• XML-RPC Port: {result['rpc_port']} (Real-time execution enabled!)\n"
+            
+            if result.get("loaded_structure"):
+                output += f"• Loaded structure: {result['loaded_structure']}\n"
+            
+            control_mode = result.get('control_mode', 'script')
+            if control_mode == 'pymol_remote':
+                output += "\n🚀 **Real-time execution enabled!** Commands will execute instantly via pymol-remote.\n"
+            elif control_mode == 'xmlrpc':
+                output += "\n🚀 **Real-time execution enabled!** Commands will execute instantly in PyMOL GUI.\n"
+            elif control_mode == 'module':
+                output += "\n⚡ **Direct module execution enabled!** Commands will execute directly.\n"
+            else:
+                output += "\n📝 **Script-based execution** - Commands will create script files for manual execution.\n"
+                
+                # Show pymol-remote error if available
+                if result.get('pymol_remote_error'):
+                    output += f"\n⚠️ **Note**: Real-time control unavailable - {result['pymol_remote_error']}\n"
+                    output += "💡 **To enable real-time control**: Install pymol-remote with `pip install pymol-remote`\n"
+            
+            output += "\n**Available Commands:**\n"
+            output += "• `execute_pymol_command` - Execute PyMOL commands\n"
+            output += "• `load_structure_gui` - Load structures\n"
+            output += "• `apply_gui_style` - Apply visualization styles\n"
+            output += "• `highlight_residues_gui` - Highlight active sites\n"
+            output += "• `get_pymol_gui_status` - Check session status\n"
+            
+            output += "\n💡 **Pro Tips:**\n"
+            output += "• Use `show cartoon` for secondary structure\n"
+            output += "• Try `color spectrum` for rainbow coloring\n"
+            output += "• Select active sites with `select site, resn HIS+ASP+GLU`\n"
+            
+            return [TextContent(type="text", text=output)]
+            
+        except Exception as e:
+            return [TextContent(
+                type="text",
+                text=f"❌ **Unexpected error:** {str(e)}\n\n🔍 **Debug info:** Check PyMOL installation and system logs"
+            )]
+    
+    async def _execute_pymol_command(self, args: Dict[str, Any]) -> List[TextContent]:
+        """Execute PyMOL command in GUI session"""
+        command = args["command"]
+        
+        try:
+            result = await self.pymol_tool.execute_pymol_command(command)
+            
+            if not result["success"]:
+                return [TextContent(
+                    type="text",
+                    text=f"Command failed: {result.get('error', 'Unknown error')}"
+                )]
+            
+            execution_method = result.get("execution_method", "unknown")
+            
+            if execution_method == "pymol_remote":
+                output = f"**🚀 PyMOL Command Executed in Real-Time!**\n\n"
+                output += f"• Command: `{result['command']}`\n"
+                output += f"• Execution: pymol_remote (instant)\n"
+                output += f"• Status: ✅ Success\n"
+                if result.get("output"):
+                    output += f"• Result: {result['output']}\n"
+            elif execution_method == "xmlrpc":
+                output = f"**🚀 PyMOL Command Executed in Real-Time!**\n\n"
+                output += f"• Command: `{result['command']}`\n"
+                output += f"• Execution: XML-RPC (instant)\n"
+                output += f"• Status: ✅ Success\n"
+            elif execution_method == "module":
+                output = f"**⚡ PyMOL Command Executed Directly!**\n\n"
+                output += f"• Command: `{result['command']}`\n"
+                output += f"• Execution: Python Module (direct)\n"
+                output += f"• Status: ✅ Success\n"
+            else:
+                output = f"**📝 PyMOL Command Script Created**\n\n"
+                output += f"• Command: `{result['command']}`\n"
+                output += f"• Execution: Script-based\n"
+                output += f"• Status: Script ready\n"
+            
+            if result.get("manual_execution_needed"):
+                output += f"\n**Instructions:**\n"
+                output += f"In PyMOL GUI, execute: `{result['instructions']}`\n"
+                if result.get("script_file"):
+                    output += f"Script saved to: {result['script_file']}\n"
+            
+            if result.get("output"):
+                output += f"\n**Output:**\n{result['output']}"
+            
+            return [TextContent(type="text", text=output)]
+            
+        except Exception as e:
+            return [TextContent(
+                type="text",
+                text=f"Error executing command: {str(e)}"
+            )]
+    
+    async def _load_structure_gui(self, args: Dict[str, Any]) -> List[TextContent]:
+        """Load structure in PyMOL GUI"""
+        file_id = args["file_id"]
+        object_name = args.get("object_name", "structure")
+        
+        # Get file path
+        file_path = await self.file_system.get_file_path(file_id)
+        if file_path is None:
+            return [TextContent(
+                type="text",
+                text=f"File with ID '{file_id}' not found"
+            )]
+        
+        # Check if it's a structure file
+        file_info = await self.file_system.get_file_info(file_id)
+        if file_info and file_info.get("bio_type") != "structure":
+            return [TextContent(
+                type="text",
+                text=f"File '{file_id}' is not a structure file."
+            )]
+        
+        try:
+            result = await self.pymol_tool.load_structure_in_gui(file_path, object_name)
+            
+            if not result["success"]:
+                return [TextContent(
+                    type="text",
+                    text=f"Failed to load structure: {result.get('error', 'Unknown error')}"
+                )]
+            
+            execution_method = result.get("execution_method", "script")
+            
+            if execution_method in ["xmlrpc", "module"]:
+                output = f"**🚀 Structure Loaded in Real-Time!**\n\n"
+                output += f"• Structure: {result.get('loaded_structure', file_path)}\n"
+                output += f"• Object name: {result.get('object_name', object_name)}\n"
+                output += f"• Execution: {execution_method} (real-time)\n"
+                output += f"• Commands executed: {result.get('commands_executed', 0)}/{result.get('total_commands', 0)}\n"
+            else:
+                output = f"**📝 Structure Loading Script Created**\n\n"
+                output += f"• Structure: {result.get('loaded_structure', file_path)}\n"
+                output += f"• Object name: {result.get('object_name', object_name)}\n"
+            
+            if result.get("instructions"):
+                output += f"\n**Instructions:**\n"
+                output += f"In PyMOL GUI, execute: `{result['instructions']}`\n"
+                output += f"Script saved to: {result['script_file']}\n"
+                
+                output += f"\n**Manual Commands (alternative):**\n"
+                for cmd in result.get('manual_commands', []):
+                    output += f"• `{cmd}`\n"
+            
+            return [TextContent(type="text", text=output)]
+            
+        except Exception as e:
+            return [TextContent(
+                type="text",
+                text=f"Error loading structure: {str(e)}"
+            )]
+    
+    async def _apply_gui_style(self, args: Dict[str, Any]) -> List[TextContent]:
+        """Apply visualization style in PyMOL GUI"""
+        object_name = args["object_name"]
+        style = args["style"]
+        color = args.get("color", "spectrum")
+        
+        try:
+            result = await self.pymol_tool.apply_visualization_style(object_name, style, color)
+            
+            if not result["success"]:
+                return [TextContent(
+                    type="text",
+                    text=f"Failed to apply style: Style application failed"
+                )]
+            
+            output = f"**Visualization Style Script Created**\n\n"
+            output += f"• Object: {result['object_name']}\n"
+            output += f"• Style: {result['style']}\n"
+            output += f"• Color: {result['color']}\n"
+            
+            if result.get("instructions"):
+                output += f"\n**Instructions:**\n"
+                output += f"In PyMOL GUI, execute: `{result['instructions']}`\n"
+                output += f"Script saved to: {result['script_file']}\n"
+                
+                output += f"\n**Manual Commands (alternative):**\n"
+                for cmd in result.get('manual_commands', []):
+                    output += f"• `{cmd}`\n"
+            
+            return [TextContent(type="text", text=output)]
+            
+        except Exception as e:
+            return [TextContent(
+                type="text",
+                text=f"Error applying style: {str(e)}"
+            )]
+    
+    async def _highlight_residues_gui(self, args: Dict[str, Any]) -> List[TextContent]:
+        """Highlight residues in PyMOL GUI"""
+        object_name = args["object_name"]
+        residue_selections = args["residue_selections"]
+        color = args.get("color", "red")
+        
+        try:
+            result = await self.pymol_tool.highlight_residues_in_gui(object_name, residue_selections, color)
+            
+            if not result["success"]:
+                return [TextContent(
+                    type="text",
+                    text=f"Failed to highlight residues: Highlighting failed"
+                )]
+            
+            output = f"**Residue Highlighting Script Created**\n\n"
+            output += f"• Object: {result['object_name']}\n"
+            output += f"• Selections highlighted: {len(result['highlighted_selections'])}\n"
+            output += f"• Color: {result['color']}\n"
+            
+            for i, selection in enumerate(result['highlighted_selections']):
+                output += f"  - Selection {i+1}: {selection}\n"
+            
+            if result.get("instructions"):
+                output += f"\n**Instructions:**\n"
+                output += f"In PyMOL GUI, execute: `{result['instructions']}`\n"
+                output += f"Script saved to: {result['script_file']}\n"
+                
+                output += f"\n**Manual Commands (alternative):**\n"
+                for cmd in result.get('manual_commands', []):
+                    output += f"• `{cmd}`\n"
+            
+            return [TextContent(type="text", text=output)]
+            
+        except Exception as e:
+            return [TextContent(
+                type="text",
+                text=f"Error highlighting residues: {str(e)}"
+            )]
+    
+    async def _get_pymol_gui_status(self, args: Dict[str, Any]) -> List[TextContent]:
+        """Get PyMOL GUI status"""
+        try:
+            result = await self.pymol_tool.get_gui_status()
+            
+            output = f"**PyMOL GUI Status**\n\n"
+            output += f"• GUI Active: {result['gui_active']}\n"
+            output += f"• PyMOL Available: {result['pymol_available']}\n"
+            output += f"• Control Method: {result.get('control_method', 'none')}\n"
+            output += f"• Real-time Execution: {'✅ Yes' if result.get('real_time_execution') else '❌ No'}\n"
+            
+            if result.get('xmlrpc_available'):
+                output += f"• XML-RPC Server: ✅ Active (port {result.get('xmlrpc_port')})\n"
+            elif result.get('module_available'):
+                output += f"• Python Module: ✅ Available\n"
+            elif result['gui_active']:
+                output += f"• Script Fallback: ✅ Available\n"
+            
+            output += f"• PyMOL Executable: {result['pymol_executable']}\n"
+            
+            if result['gui_active'] and result.get('process_id'):
+                output += f"• Process ID: {result['process_id']}\n"
+            
+            if not result['gui_active']:
+                output += "\n**Note:** No active GUI session. Use `launch_pymol_gui` to start one."
+            elif result.get('real_time_execution'):
+                output += "\n🚀 **Real-time command execution is enabled!**"
+            else:
+                output += "\n📝 **Script-based execution is available.**"
+            
+            return [TextContent(type="text", text=output)]
+            
+        except Exception as e:
+            return [TextContent(
+                type="text",
+                text=f"Error getting GUI status: {str(e)}"
             )]
     
     async def run(self, transport_type: str = "stdio"):

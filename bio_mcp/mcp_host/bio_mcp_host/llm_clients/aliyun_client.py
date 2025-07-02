@@ -5,8 +5,8 @@ from bio_mcp_host.llm_clients.base import BaseLLMClient, Message, LLMResponse, L
 class AliyunClient(BaseLLMClient):
     """Aliyun Qwen client"""
     
-    def __init__(self, config: LLMConfig):
-        super().__init__(config)
+    def __init__(self, config: LLMConfig, mcp_client=None):
+        super().__init__(config, mcp_client)
         dashscope.api_key = self.api_key
         
         # Latest models (2025)

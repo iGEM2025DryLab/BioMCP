@@ -59,7 +59,7 @@ html_content = """
             <p>To use the full Bio MCP system, run these commands in your terminal:</p>
             
             <div class="command-list">
-                <div class="command">cd /Users/zhaoj/Project/BioMCP/BioMCP/bio_mcp</div>
+                <div class="command">cd bio_mcp</div>
                 <div class="command">python3 run_host.py --interactive</div>
             </div>
             

@@ -5,8 +5,8 @@ from bio_mcp_host.llm_clients.base import BaseLLMClient, Message, LLMResponse, L
 class GoogleClient(BaseLLMClient):
     """Google Gemini client"""
     
-    def __init__(self, config: LLMConfig):
-        super().__init__(config)
+    def __init__(self, config: LLMConfig, mcp_client=None):
+        super().__init__(config, mcp_client)
         genai.configure(api_key=self.api_key)
         
         # Latest models (2025)
@@ -25,7 +25,7 @@ class GoogleClient(BaseLLMClient):
                             messages: List[Message], 
                             stream: bool = False,
                             **kwargs) -> LLMResponse:
-        """Generate chat completion using Google Gemini API"""
+        """Generate chat completion using Google Gemini API with tool calling support"""
         
         # Format messages for Gemini
         chat_history, current_message = self._format_messages_for_gemini(messages)
@@ -37,10 +37,12 @@ class GoogleClient(BaseLLMClient):
         # Create generation config
         generation_config = self._create_generation_config(params)
         
+        # Get available tools
+        available_tools = self._convert_mcp_tools_to_gemini()
+        
         try:
             if stream:
-                # Handle streaming
-                response_content = ""
+                # Handle streaming - for now, disable tool calling in streaming mode
                 chat = self.gemini_model.start_chat(history=chat_history)
                 
                 response_stream = await chat.send_message_async(
@@ -49,6 +51,7 @@ class GoogleClient(BaseLLMClient):
                     stream=True
                 )
                 
+                response_content = ""
                 async for chunk in response_stream:
                     if chunk.text:
                         response_content += chunk.text
@@ -59,21 +62,68 @@ class GoogleClient(BaseLLMClient):
                     metadata={"provider": "google", "model": self.model}
                 )
             else:
-                # Regular completion
+                # Regular completion with tool calling
                 if chat_history:
                     chat = self.gemini_model.start_chat(history=chat_history)
-                    response = await chat.send_message_async(
-                        current_message,
-                        generation_config=generation_config
-                    )
+                    
+                    # Send message with tools if available
+                    if available_tools:
+                        response = await chat.send_message_async(
+                            current_message,
+                            generation_config=generation_config,
+                            tools=[{"function_declarations": available_tools}]
+                        )
+                    else:
+                        response = await chat.send_message_async(
+                            current_message,
+                            generation_config=generation_config
+                        )
                 else:
-                    response = await self.gemini_model.generate_content_async(
-                        current_message,
-                        generation_config=generation_config
-                    )
+                    # Use generate_content for single message
+                    if available_tools:
+                        response = await self.gemini_model.generate_content_async(
+                            current_message,
+                            generation_config=generation_config,
+                            tools=[{"function_declarations": available_tools}]
+                        )
+                    else:
+                        response = await self.gemini_model.generate_content_async(
+                            current_message,
+                            generation_config=generation_config
+                        )
+                
+                # Check for function calls
+                function_calls = self._extract_function_calls(response)
+                
+                if function_calls:
+                    # Execute function calls
+                    function_results = await self._execute_function_calls(function_calls)
+                    
+                    # Format results for continued conversation
+                    results_text = self._format_function_results(function_results)
+                    
+                    # Continue conversation with function results
+                    if chat_history:
+                        # Add function call and results to chat history
+                        follow_up_response = await chat.send_message_async(
+                            f"Function results:\n{results_text}\n\nPlease provide a response based on these results.",
+                            generation_config=generation_config
+                        )
+                        final_content = follow_up_response.text
+                    else:
+                        # For single message, create new chat with function results
+                        new_chat = self.gemini_model.start_chat()
+                        follow_up_response = await new_chat.send_message_async(
+                            f"Based on the function call results:\n{results_text}\n\nOriginal request: {current_message}\n\nPlease provide a helpful response.",
+                            generation_config=generation_config
+                        )
+                        final_content = follow_up_response.text
+                else:
+                    # No function calls, use original response
+                    final_content = response.text
                 
                 return LLMResponse(
-                    content=response.text,
+                    content=final_content,
                     usage={
                         "prompt_token_count": getattr(response.usage_metadata, 'prompt_token_count', None),
                         "candidates_token_count": getattr(response.usage_metadata, 'candidates_token_count', None),
@@ -82,7 +132,8 @@ class GoogleClient(BaseLLMClient):
                     metadata={
                         "provider": "google",
                         "model": self.model,
-                        "finish_reason": response.candidates[0].finish_reason.name if response.candidates else None
+                        "finish_reason": response.candidates[0].finish_reason.name if response.candidates else None,
+                        "function_calls": function_calls if function_calls else None
                     }
                 )
                 
@@ -184,14 +235,84 @@ class GoogleClient(BaseLLMClient):
         }
         return context_lengths.get(self.model, 32768)
     
+    def _convert_mcp_tools_to_gemini(self) -> List[Dict[str, Any]]:
+        """Convert MCP tools to Gemini function declarations"""
+        if not self.mcp_client:
+            return []
+            
+        tools = self.get_available_tools()
+        gemini_functions = []
+        
+        for tool in tools:
+            function_declaration = {
+                "name": tool["name"],
+                "description": tool["description"],
+                "parameters": tool["parameters"]
+            }
+            gemini_functions.append(function_declaration)
+        
+        return gemini_functions
+    
+    def _extract_function_calls(self, response) -> List[Dict[str, Any]]:
+        """Extract function calls from Gemini response"""
+        function_calls = []
+        
+        try:
+            if hasattr(response, 'candidates') and response.candidates:
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                    for part in candidate.content.parts:
+                        if hasattr(part, 'function_call'):
+                            function_calls.append({
+                                "name": part.function_call.name,
+                                "arguments": dict(part.function_call.args)
+                            })
+            
+            # Optional debug output
+            # if function_calls:
+            #     print(f"🔧 DEBUG: Extracted {len(function_calls)} function calls")
+                        
+        except Exception as e:
+            pass  # Silently handle extraction errors
+        
+        return function_calls
+    
+    async def _execute_function_calls(self, function_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Execute function calls using MCP client"""
+        results = []
+        
+        for call in function_calls:
+            try:
+                result = await self.call_mcp_tool(call["name"], call["arguments"])
+                results.append({
+                    "name": call["name"],
+                    "result": result
+                })
+            except Exception as e:
+                results.append({
+                    "name": call["name"],
+                    "error": str(e)
+                })
+        
+        return results
+    
+    def _format_function_results(self, results: List[Dict[str, Any]]) -> str:
+        """Format function call results for the LLM"""
+        formatted_results = []
+        
+        for result in results:
+            if "error" in result:
+                formatted_results.append(f"Function {result['name']} failed: {result['error']}")
+            else:
+                formatted_results.append(f"Function {result['name']} returned: {result['result']}")
+        
+        return "\n".join(formatted_results)
+    
     async def test_connection(self) -> bool:
         """Test Google Gemini API connection"""
         try:
-            test_messages = [Message(role="user", content="Hello")]
-            response = await self.chat_completion(
-                messages=test_messages,
-                max_tokens=1000
-            )
-            return response.content is not None
+            # Use direct API call without tools for testing
+            response = await self.gemini_model.generate_content_async("Hello")
+            return response.text is not None and len(response.text) > 0
         except Exception:
             return False

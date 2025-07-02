@@ -1,3 +1,4 @@
+import json
 import openai
 from typing import List, Dict, Any, AsyncIterator
 from bio_mcp_host.llm_clients.base import BaseLLMClient, Message, LLMResponse, LLMConfig
@@ -5,8 +6,8 @@ from bio_mcp_host.llm_clients.base import BaseLLMClient, Message, LLMResponse, L
 class OpenAIClient(BaseLLMClient):
     """OpenAI GPT client"""
     
-    def __init__(self, config: LLMConfig):
-        super().__init__(config)
+    def __init__(self, config: LLMConfig, mcp_client=None):
+        super().__init__(config, mcp_client)
         self.client = openai.AsyncOpenAI(api_key=self.api_key)
         
         # Latest models (2025)
@@ -55,27 +56,92 @@ class OpenAIClient(BaseLLMClient):
                     metadata={"provider": "openai", "model": self.model}
                 )
             else:
-                # Regular completion
-                response = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=formatted_messages,
-                    **params
-                )
+                # Regular completion with tool calling
+                available_tools = self._convert_mcp_tools_to_openai()
                 
-                return LLMResponse(
-                    content=response.choices[0].message.content,
-                    usage={
-                        "prompt_tokens": response.usage.prompt_tokens,
-                        "completion_tokens": response.usage.completion_tokens,
-                        "total_tokens": response.usage.total_tokens
-                    } if response.usage else None,
-                    metadata={
-                        "provider": "openai",
-                        "model": self.model,
-                        "id": response.id,
-                        "finish_reason": response.choices[0].finish_reason
-                    }
-                )
+                # First API call with tools
+                if available_tools:
+                    response = await self.client.chat.completions.create(
+                        model=self.model,
+                        messages=formatted_messages,
+                        tools=available_tools,
+                        **params
+                    )
+                else:
+                    response = await self.client.chat.completions.create(
+                        model=self.model,
+                        messages=formatted_messages,
+                        **params
+                    )
+                
+                # Check if the model wants to call tools
+                message = response.choices[0].message
+                if hasattr(message, 'tool_calls') and message.tool_calls:
+                    # Execute tool calls
+                    tool_results = []
+                    for tool_call in message.tool_calls:
+                        try:
+                            args = json.loads(tool_call.function.arguments) if isinstance(tool_call.function.arguments, str) else tool_call.function.arguments
+                            result = await self.call_mcp_tool(tool_call.function.name, args)
+                            tool_results.append({
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "content": json.dumps(result)
+                            })
+                        except Exception as e:
+                            tool_results.append({
+                                "tool_call_id": tool_call.id,
+                                "role": "tool", 
+                                "content": json.dumps({"error": str(e)})
+                            })
+                    
+                    # Continue conversation with tool results
+                    new_messages = formatted_messages + [
+                        {
+                            "role": "assistant",
+                            "content": message.content,
+                            "tool_calls": [{"id": tc.id, "type": tc.type, "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in message.tool_calls]
+                        }
+                    ] + tool_results
+                    
+                    # Second API call with tool results
+                    final_response = await self.client.chat.completions.create(
+                        model=self.model,
+                        messages=new_messages,
+                        **params
+                    )
+                    
+                    return LLMResponse(
+                        content=final_response.choices[0].message.content,
+                        usage={
+                            "prompt_tokens": final_response.usage.prompt_tokens,
+                            "completion_tokens": final_response.usage.completion_tokens,
+                            "total_tokens": final_response.usage.total_tokens
+                        } if final_response.usage else None,
+                        metadata={
+                            "provider": "openai",
+                            "model": self.model,
+                            "id": final_response.id,
+                            "finish_reason": final_response.choices[0].finish_reason,
+                            "tool_calls": len(message.tool_calls)
+                        }
+                    )
+                else:
+                    # No tool calls, return original response
+                    return LLMResponse(
+                        content=message.content,
+                        usage={
+                            "prompt_tokens": response.usage.prompt_tokens,
+                            "completion_tokens": response.usage.completion_tokens,
+                            "total_tokens": response.usage.total_tokens
+                        } if response.usage else None,
+                        metadata={
+                            "provider": "openai",
+                            "model": self.model,
+                            "id": response.id,
+                            "finish_reason": response.choices[0].finish_reason
+                        }
+                    )
                 
         except Exception as e:
             raise Exception(f"OpenAI API error: {str(e)}")
@@ -138,6 +204,27 @@ class OpenAIClient(BaseLLMClient):
             "gpt-3.5-turbo": 16384   # Updated context
         }
         return context_lengths.get(self.model, 8192)
+    
+    def _convert_mcp_tools_to_openai(self) -> List[Dict[str, Any]]:
+        """Convert MCP tools to OpenAI function format"""
+        if not self.mcp_client:
+            return []
+            
+        tools = self.get_available_tools()
+        openai_tools = []
+        
+        for tool in tools:
+            function_def = {
+                "type": "function",
+                "function": {
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    "parameters": tool["parameters"]
+                }
+            }
+            openai_tools.append(function_def)
+        
+        return openai_tools
     
     async def test_connection(self) -> bool:
         """Test OpenAI API connection"""

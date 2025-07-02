@@ -21,14 +21,14 @@
     "file_id": "cleaned_structure_5f54226f",
     "size": 286198,
     "file_type": ".pdb",
-    "upload_time": "2025-06-29T18:58:31.000455",
+    "upload_time": "2025-06-29T19:21:24.498179",
     "checksum": "5f54226f0c44f8a976bed4a3667ec2f9",
     "bio_type": "structure",
     "additional_info": {
       "chains": [
-        "A",
+        "G",
         "F",
-        "G"
+        "A"
       ],
       "residue_count": 3533
     }

@@ -33,11 +33,12 @@ class LLMConfig:
 class BaseLLMClient(ABC):
     """Base class for all LLM clients"""
     
-    def __init__(self, config: LLMConfig):
+    def __init__(self, config: LLMConfig, mcp_client=None):
         self.config = config
         self.provider = config.provider
         self.model = config.model
         self.api_key = config.api_key
+        self.mcp_client = mcp_client
         
     @abstractmethod
     async def chat_completion(self, 
@@ -97,3 +98,15 @@ class BaseLLMClient(ABC):
         if self.config.additional_params:
             params.update(self.config.additional_params)
         return params
+    
+    def get_available_tools(self) -> List[Dict[str, Any]]:
+        """Get available MCP tools if client is set"""
+        if self.mcp_client:
+            return self.mcp_client.get_available_tools()
+        return []
+    
+    async def call_mcp_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Call an MCP tool if client is available"""
+        if self.mcp_client:
+            return await self.mcp_client.call_tool(name, arguments)
+        return {"error": "No MCP client available", "success": False}

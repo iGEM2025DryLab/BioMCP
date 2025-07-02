@@ -1,4 +1,4 @@
-name: bio-mcp
+name: bio_mcp
 channels:
   - conda-forge
   - schrodinger
@@ -23,4 +23,5 @@ dependencies:
     - pytest
     - pytest-asyncio
     - python-dotenv
+    - pymol-remote
 

@@ -1,0 +1,48 @@
+include README.md
+include LICENSE
+include bio_mcp/README.md
+include bio_mcp/requirements.txt
+include bio_mcp/environment.yml
+include bio_mcp/CHANGELOG.md
+include bio_mcp/USAGE_GUIDE.md
+include bio_mcp/UPLOAD_INSTRUCTIONS.md
+
+# Include package data
+recursive-include bio_mcp *.py
+recursive-include bio_mcp *.yml
+recursive-include bio_mcp *.yaml
+recursive-include bio_mcp *.json
+recursive-include bio_mcp *.md
+recursive-include bio_mcp *.txt
+
+# Include bio_data structure but not user files
+include bio_mcp/bio_data/metadata.json
+recursive-include bio_mcp/bio_data/analysis .gitkeep
+recursive-include bio_mcp/bio_data/sequences .gitkeep
+recursive-include bio_mcp/bio_data/structures .gitkeep
+recursive-include bio_mcp/bio_data/visualizations .gitkeep
+
+# Exclude cache and temporary files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude *.egg-info
+global-exclude .git*
+global-exclude .pytest_cache
+global-exclude .coverage
+global-exclude .tox
+global-exclude .venv
+global-exclude venv
+global-exclude env
+
+# Exclude test files and temporary data
+global-exclude test_*.pdb
+global-exclude temp_*.pdb
+global-exclude cleaned_structure_*.pdb
+global-exclude realtime_command_*.pml
+global-exclude .env
+global-exclude .env.local
+global-exclude claude_desktop_config.json

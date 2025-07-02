@@ -21,8 +21,8 @@ class BioMCPHost:
     """Main host that coordinates LLMs and MCP server communication"""
     
     def __init__(self, bio_mcp_server_command: List[str]):
-        self.llm_manager = LLMManager()
         self.bio_mcp_client = BioMCPClient(bio_mcp_server_command)
+        self.llm_manager = LLMManager(self.bio_mcp_client)
         self.chat_sessions: Dict[str, ChatSession] = {}
         self.connected = False
     
@@ -180,16 +180,7 @@ class BioMCPHost:
     
     def _get_default_system_message(self) -> str:
         """Get default system message for bio research"""
-        available_tools = self.bio_mcp_client.get_available_tools()
-        tool_descriptions = "\n".join([
-            f"- {tool['name']}: {tool['description']}"
-            for tool in available_tools
-        ])
-        
-        return f"""You are a helpful AI assistant specialized in biological research. You have access to bio-analysis tools through an MCP server.
-
-Available tools:
-{tool_descriptions}
+        return """You are a helpful AI assistant specialized in biological research. You have access to bio-analysis tools that you can call directly.
 
 You can help with:
 - Protein structure analysis and visualization
@@ -197,6 +188,8 @@ You can help with:
 - DNA/RNA sequence analysis
 - File management for biological data
 - Structural biology research
+
+IMPORTANT: When users ask about uploading files, guide them to use the bio-mcp CLI upload command (e.g., 'upload protein.pdb') rather than uploading files directly to AI applications like Claude Desktop. The CLI provides proper file handling, automatic base64 encoding, and seamless integration with biological analysis tools. After upload, files can be listed with 'files' command and analyzed with tools like 'calculate_pka' and 'visualize_structure'.
 
 When users ask about biological analysis, use the appropriate tools to help them. Always explain what you're doing and provide clear interpretations of results."""
     

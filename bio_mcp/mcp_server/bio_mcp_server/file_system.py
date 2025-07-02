@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import hashlib
 from pathlib import Path
@@ -27,9 +28,32 @@ class FileMetadata:
 class BioFileSystem:
     """Smart file system for biological data with metadata and efficient access"""
     
-    def __init__(self, base_path: str = "./bio_data"):
+    def __init__(self, base_path: str = None):
+        if base_path is None:
+            # Use absolute path in the project directory
+            project_root = Path(__file__).parent.parent.parent
+            base_path = project_root / "bio_data"
+        
         self.base_path = Path(base_path)
-        self.base_path.mkdir(exist_ok=True)
+        try:
+            self.base_path.mkdir(exist_ok=True)
+        except OSError as e:
+            # If we can't create in the intended location, fall back to home directory
+            fallback_path = Path.home() / ".bio_mcp_data"
+            fallback_path.mkdir(exist_ok=True)
+            print(f"Warning: Using fallback data directory: {fallback_path}", file=sys.stderr)
+            
+            # Copy existing data if the original path exists and has data
+            original_path = Path(base_path)
+            if original_path.exists() and (original_path / "metadata.json").exists():
+                import shutil
+                try:
+                    shutil.copytree(original_path, fallback_path, dirs_exist_ok=True)
+                    print(f"Copied existing data to fallback location", file=sys.stderr)
+                except Exception as copy_err:
+                    print(f"Warning: Could not copy existing data: {copy_err}", file=sys.stderr)
+            
+            self.base_path = fallback_path
         
         # Create subdirectories
         self.structures_path = self.base_path / "structures"

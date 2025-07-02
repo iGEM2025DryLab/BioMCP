@@ -192,3 +192,31 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Bio MCP specific
+# Temporary biological data files
+bio_data/temp/
+bio_data/visualizations/realtime_command_*.pml
+bio_data/visualizations/temp_*.png
+
+# System-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# User-specific configuration
+claude_desktop_config.json
+.env.local
+
+# Test artifacts
+test_*.pdb
+temp_*.pdb
+cleaned_structure_*.pdb
+
+# Temporary directories
+/tmp/
+temp/

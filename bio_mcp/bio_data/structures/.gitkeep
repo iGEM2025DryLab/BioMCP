@@ -1,0 +1,3 @@
+# This file ensures the structures directory is included in version control
+# PDB and structure files will be stored here
+# Note: Large structure files and test files are excluded by .gitignore

@@ -9,9 +9,10 @@ from bio_mcp_host.llm_clients.aliyun_client import AliyunClient
 class LLMManager:
     """Manages multiple LLM clients and provides unified interface"""
     
-    def __init__(self):
+    def __init__(self, mcp_client=None):
         self.clients: Dict[str, BaseLLMClient] = {}
         self.default_client: Optional[str] = None
+        self.mcp_client = mcp_client
         self._load_clients_from_env()
     
     def _load_clients_from_env(self):
@@ -28,7 +29,7 @@ class LLMManager:
                     max_tokens=int(os.getenv("ANTHROPIC_MAX_TOKENS", "4000")),
                     temperature=float(os.getenv("ANTHROPIC_TEMPERATURE", "0.7"))
                 )
-                self.add_client("anthropic", AnthropicClient(config))
+                self.add_client("anthropic", AnthropicClient(config, self.mcp_client))
                 if not self.default_client:
                     self.default_client = "anthropic"
             except Exception as e:
@@ -45,7 +46,7 @@ class LLMManager:
                     max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "4000")),
                     temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
                 )
-                self.add_client("openai", OpenAIClient(config))
+                self.add_client("openai", OpenAIClient(config, self.mcp_client))
                 if not self.default_client:
                     self.default_client = "openai"
             except Exception as e:
@@ -62,7 +63,7 @@ class LLMManager:
                     max_tokens=int(os.getenv("GOOGLE_MAX_TOKENS", "4000")),
                     temperature=float(os.getenv("GOOGLE_TEMPERATURE", "0.7"))
                 )
-                self.add_client("google", GoogleClient(config))
+                self.add_client("google", GoogleClient(config, self.mcp_client))
                 if not self.default_client:
                     self.default_client = "google"
             except Exception as e:
@@ -79,7 +80,7 @@ class LLMManager:
                     max_tokens=int(os.getenv("ALIYUN_MAX_TOKENS", "4000")),
                     temperature=float(os.getenv("ALIYUN_TEMPERATURE", "0.7"))
                 )
-                self.add_client("aliyun", AliyunClient(config))
+                self.add_client("aliyun", AliyunClient(config, self.mcp_client))
                 if not self.default_client:
                     self.default_client = "aliyun"
             except Exception as e:
@@ -163,13 +164,13 @@ class LLMManager:
     def create_client_from_config(self, name: str, config: LLMConfig) -> BaseLLMClient:
         """Create and add a client from configuration"""
         if config.provider == LLMProvider.ANTHROPIC:
-            client = AnthropicClient(config)
+            client = AnthropicClient(config, self.mcp_client)
         elif config.provider == LLMProvider.OPENAI:
-            client = OpenAIClient(config)
+            client = OpenAIClient(config, self.mcp_client)
         elif config.provider == LLMProvider.GOOGLE:
-            client = GoogleClient(config)
+            client = GoogleClient(config, self.mcp_client)
         elif config.provider == LLMProvider.ALIYUN:
-            client = AliyunClient(config)
+            client = AliyunClient(config, self.mcp_client)
         else:
             raise ValueError(f"Unsupported provider: {config.provider}")
         

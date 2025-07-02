@@ -6,6 +6,38 @@ Bio MCP - Main entry point for the AI-powered biological research platform
 import argparse
 import sys
 import os
+from pathlib import Path
+
+def get_best_python():
+    """Find the best Python executable to use"""
+    # Common conda locations
+    common_conda_roots = [
+        Path.home() / 'anaconda3',
+        Path.home() / 'miniconda3',
+        Path('/opt/anaconda3'),
+        Path('/opt/miniconda3'),
+        Path('/usr/local/anaconda3'),
+        Path('/usr/local/miniconda3')
+    ]
+    
+    # Common environment names
+    common_env_names = ['bio-mcp', 'biomcp', 'bio_mcp']
+    
+    # Try environment-specific Python first
+    for conda_root in common_conda_roots:
+        if conda_root.exists():
+            for env_name in common_env_names:
+                env_python = conda_root / 'envs' / env_name / 'bin' / 'python3'
+                if env_python.exists():
+                    return str(env_python)
+            
+            # Try base conda Python
+            base_python = conda_root / 'bin' / 'python3'
+            if base_python.exists():
+                return str(base_python)
+    
+    # Fall back to system Python
+    return 'python3'
 
 def main():
     """Main entry point for Bio MCP"""
@@ -52,18 +84,22 @@ For more information, see README.md
     try:
         if args.command == 'interactive':
             print("🚀 Starting Bio MCP in interactive mode...")
-            os.system("python3 run_host.py --interactive")
+            python_cmd = get_best_python()
+            os.system(f"{python_cmd} run_host.py --interactive")
             
         elif args.command == 'server':
             print("🔧 Starting Bio MCP server...")
-            os.system("python3 run_server.py")
+            python_cmd = get_best_python()
+            os.system(f"{python_cmd} run_server.py")
             
         elif args.command == 'gui':
             print("🌐 Starting Bio MCP web GUI...")
-            os.system("python3 launch_gui.py")
+            python_cmd = get_best_python()
+            os.system(f"{python_cmd} launch_gui.py")
             
         elif args.command == 'host':
-            cmd = "python3 run_host.py"
+            python_cmd = get_best_python()
+            cmd = f"{python_cmd} run_host.py"
             if args.interactive:
                 cmd += " --interactive"
             if args.server_command != 'python3 run_server.py':
